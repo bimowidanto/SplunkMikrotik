@@ -1,0 +1,216 @@
+Splunk Install For Mikrotik
+
+https://forum.mikrotik.com/viewtopic.php?t=137338&sid=6bbdbbc818e3ab6fb4f08082910b4c35
+
+1. Install Ubuntu 18.04
+Note: Please do not create default user with splunk, user other name
+2. Intall Splunk and Rsyslog as a non root user
+Create Splunk User
+$sudo useradd -c "splunk user" -m -s /bin/bash -U -d /opt/splunk splunk
+$sudo su –
+$passwd splunk
+Login Splunk user
+sudo su - splunk
+Download Splunk .deb
+https://www.splunk.com/en_us/download/splunk-enterprise.html
+$ wget -O splunk-8.2.2-87344edfcdb4-linux-2.6-amd64.deb 'https://d7wz6hmoaavd0.cloudfront.net/products/splunk/releases/8.2.2/linux/splunk-8.2.2-87344edfcdb4-linux-2.6-amd64.deb'
+
+$sudo dpkg -i filename.deb
+Jika memakai menggunakan wget tgz
+$sudo wget -O splunk-8.2.2-87344edfcdb4-Linux-x86_64.tgz 'https://d7wz6hmoaavd0.cloudfront.net/products/splunk/releases/8.2.2/linux/splunk-8.2.2-87344edfcdb4-Linux-x86_64.tgz'
+
+$tar xvzf /tmp/splunk-8.2.2-87344edfcdb4-Linux-x86_64.tgz -C /opt
+Make Splunk autostart with user splunk (as root user)
+$sudo su - splunk
+$~/bin/splunk start
+You can exit for a while
+$exit
+$sudo /opt/splunk/bin/splunk enable boot-start -user splunk
+Use Splunk user
+$sudo su - splunk
+For use Splunk with non root user setup syslog splunk on port 1514, if use splunk with root user you cant use port 514
+Install Rsyslog With non root user
+$cd /etc/rsyslog.d/
+Create file udp.conf and tcp.conf
+$sudo vi udp.conf
+# rsyslog.d/udp.conf
+#
+# This receives UDP syslog on port 514 and stores it in a reliable format
+# in /data/syslog/udp/:
+#
+#  - A subdirectory is created for each logging host.
+#    The directory name is the source IP address of the received log message.
+#    The log filename is made up of date and hour of file creation.
+#    A new log file is created for each logging host every hour.
+#
+#  - Each log message is prefixed with a locally generated timestamp.
+#
+#  - Then the raw, undecoded text of the incoming syslog message is written.
+#    If the message is missing <PRI> then a default <PRI> is prepended.
+#    This ensures that both old tyle (RFC-3164) and new style (RFC-5424)
+#    syslog messages can be recognised and parsed from the log files without
+#    risk of loosing information. The raw messages also include the original
+#    host name and time stamp from the sender.
+#
+#  - Each written log message is guaranteed to end in a single newline
+#    character.
+#
+
+# Stupidly this is set to "on" in the default rsyslog.conf file
+# Do our best to negate the effect.
+$RepeatedMsgReduction off
+
+module(load="imudp")
+
+
+# format
+template(name="RawFormat" type="list") {
+  property(name="timegenerated" dateformat="rfc3339")
+  constant(value=" ")
+  constant(value="<")
+  property(name="pri")
+  constant(value=">")
+  property(name="rawmsg-after-pri" droplastlf="on")
+  constant(value="\n")
+}
+
+# file name
+template(name="udp_split_filename" type="list") {
+  constant(value="/data/syslog/udp/")
+  property(name="fromhost-ip")
+  constant(value="/")
+  property(name="$year")
+  property(name="$month")
+  property(name="$day")
+  constant(value="-")
+  property(name="$hour")
+  #property(name="$minute")
+  constant(value=".log")
+}
+
+# rule set
+ruleset(name="udp_split") {
+  action(type="omfile"
+    template="RawFormat"
+    createDirs="on"
+    dirCreateMode="0755"
+    fileCreateMode="0644"
+    dynaFile="udp_split_filename"
+  )
+}
+
+# setting
+input(type="imudp" port="514" ruleset="udp_split")
+
+$sudo vi tcp.conf
+# rsyslog.d/tcp.conf
+#
+# This receives TCP syslog on port 1514 and stores it in a reliable format
+# in /data/syslog/tcp/:
+#
+#  - A subdirectory is created for each logging host.
+#    The directory name is the source IP address of the received log message.
+#    The log filename is made up of date and hour of file creation.
+#    A new log file is created for each logging host every hour.
+#
+#  - Each log message is prefixed with a locally generated timestamp.
+#
+#  - Then the raw, undecoded text of the incoming syslog message is written.
+#    If the message is missing <PRI> then a default <PRI> is prepended.
+#    This ensures that both old tyle (RFC-3164) and new style (RFC-5424)
+#    syslog messages can be recognised and parsed from the log files without
+#    risk of loosing information. The raw messages also include the original
+#    host name and time stamp from the sender.
+#
+#  - Each written log message is guaranteed to end in a single newline
+#    character.
+#
+
+# Stupidly this is set to "on" in the default rsyslog.conf file
+# Do our best to negate the effect.
+$RepeatedMsgReduction off
+
+module(load="imtcp")
+
+
+# format
+template(name="RawFormat" type="list") {
+  property(name="timegenerated" dateformat="rfc3339")
+  constant(value=" ")
+  constant(value="<")
+  property(name="pri")
+  constant(value=">")
+  property(name="rawmsg-after-pri" droplastlf="on")
+  constant(value="\n")
+}
+
+# file name
+template(name="tcp_split_filename" type="list") {
+  constant(value="/data/syslog/tcp/")
+  property(name="fromhost-ip")
+  constant(value="/")
+  property(name="$year")
+  property(name="$month")
+  property(name="$day")
+  constant(value="-")
+  property(name="$hour")
+  #property(name="$minute")
+  constant(value=".log")
+}
+
+# rule set
+ruleset(name="tcp_split") {
+  action(type="omfile"
+    template="RawFormat"
+    createDirs="on"
+    dirCreateMode="0755"
+    fileCreateMode="0644"
+    dynaFile="tcp_split_filename"
+  )
+}
+
+# settings
+input(type="imtcp" port="1514" ruleset="tcp_split")
+Create New Folder Syslog udp & tcp
+$sudo mkdir /data
+$sudo mkdir /data/syslog
+$sudo mkdir /data/syslog/tcp
+$sudo mkdir /data/syslog/udp
+
+$sudo chown -R syslog:syslog /data/syslog
+$sudo service rsyslog restart
+Make sure rsyslog running
+$sudo ss -tunlp | grep syslog
+udp   UNCONN 0      0                                0.0.0.0:514        0.0.0.0:*     users:(("rsyslogd",pid=5532,fd=8))
+udp   UNCONN 0      0                                   [::]:514           [::]:*     users:(("rsyslogd",pid=5532,fd=9))
+tcp   LISTEN 0      25                               0.0.0.0:1514       0.0.0.0:*     users:(("rsyslogd",pid=5532,fd=6))
+tcp   LISTEN 0      25                                  [::]:1514          [::]:*     users:(("rsyslogd",pid=5532,fd=7))
+
+
+$sudo netstat -tunlp | grep rsyslog
+tcp        0      0 0.0.0.0:1514            0.0.0.0:*               LISTEN      1459/rsyslogd
+tcp6       0      0 :::1514                 :::*                    LISTEN      1459/rsyslogd
+udp        0      0 0.0.0.0:514             0.0.0.0:*                           1459/rsyslogd
+udp6       0      0 :::514                  :::*                                1459/rsyslogd
+
+Test Syslog
+echo '<14>sourcehost message text' | nc -v -u -w 0 127.0.0.1 514
+
+check data on directory /data/syslog/udp/127.0.0.1
+
+$systemctl start splunk
+
+3. Setup Splunk Web GUI
+Setting > Licensing > Change License Group > Free License > Save
+
+
+4. Allow UDP 1514 Syslog
+Setting > Data Input > Add New (on UDP) >  Port 1514 > Next > Sourcetype type syslog and select (Syslog) > Next > Submit
+
+
+5. Restart Splunk
+Setting > Server Controls > Restart Splunk
+Set Time
+sudo timedatectl set-timezone Asia/Jakarta
+
+> 
